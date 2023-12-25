@@ -1,3 +1,5 @@
+const loggedUrl = '/transactions';
+
 const base64url = {
     encode: function(buffer) {
         const base64 = window.btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -14,17 +16,11 @@ const base64url = {
     }
 }
 
-function getChallenge(){
-    fetch('/challenge', {method: 'GET'}).then(res => {
-        console.log(res);
-    });
-}
-
 function submitForm(e){
     this.event.preventDefault();
     register(window.username.value, window.password.value).then(res => {
         if (res.ok) {
-            window.location.href = '/transactions';
+            window.location.href = loggedUrl;
         }
     });
 }
@@ -150,6 +146,7 @@ async function autoSignin(){
                 // If a conditional UI is supported, invoke the conditional `authenticate()` immediately.
                 const user = await authenticate(true);
                 if (user) {
+                    window.location.href = loggedUrl;
                     // When the user is signed in, redirect to the home page.
                     // $('#username').value = user.username;
                     // loading.start();
