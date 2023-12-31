@@ -2,6 +2,8 @@ require('dotenv').config();
 
 const express = require('express');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
+
 const {Pool} = require("pg");
 const crypto = require('crypto');
 
@@ -49,10 +51,16 @@ const auth = (req, res, next)=>{
 app.use(express.static('public'));
 
 app.use(session({
-    resave: true,
-    saveUninitialized: true,
-    secret: '1D0lEmP@r*',
-    cookie: { maxAge: 60000 }
+    store: new pgSession({
+        pool,
+        tableName: 'sessions', // Name of the table you created for sessions
+    }),
+    secret: 'Aa123456$%&@#$', // Replace with your secret key
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    },
 }));
 
 app.get('/', (req, res) => {
