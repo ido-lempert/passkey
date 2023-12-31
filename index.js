@@ -1,7 +1,18 @@
+require('dotenv').config();
+
 const express = require('express');
 const session = require('express-session');
-
+const {Pool} = require("pg");
 const crypto = require('crypto');
+
+const pool = new Pool({
+    user: process.env.DB_USERNAME,
+    host: process.env.DB_HOSTNAME,
+    database: process.env.DB_DATABASE,
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.DB_SSL ? process.env.DB_SSL : false,
+});
+
 
 const {
     generateRegistrationOptions,
@@ -68,14 +79,28 @@ app.get('/challenge', async (req, res) => {
 });
 
 app.post('/register', json(), async (req, res)=>{
-    const user = {
-        id: isoBase64URL.fromBuffer(crypto.randomBytes(32)),
-        username: req.body.username,
-        password: req.body.password
-    };
+    const uuid = isoBase64URL.fromBuffer(crypto.randomBytes(32));
+    // const user = {
+    //     id: isoBase64URL.fromBuffer(crypto.randomBytes(32)),
+    //     username: req.body.username,
+    //     password: req.body.password
+    // };
 
-    users.push(user);
-    req.session.user = user;
+    // Insert user to DB
+    let user;
+    try{
+        const data = [req.body.username, req.body.password, uuid];
+        const userResult = await pool.query('INSERT INTO users (username, password, uuid) VALUES ($1,$2, $3) RETURNING *', data);
+        user = userResult.rows[0];
+        req.session.user = {id: user.id, uuid: user.uuid, username: user.username };
+        // const data = {msg: 'register success'};
+        //
+        // console.log(req.path, data, result.rows[0]);
+        //
+        // return res.json(data);
+    } catch (e) {
+        return res.sendStatus(500);
+    }
 
     try {
         // Create `excludeCredentials` from a list of stored credentials.
@@ -99,7 +124,7 @@ app.post('/register', json(), async (req, res)=>{
         const options = await generateRegistrationOptions({
             rpName: rpName,
             rpID: rpID,
-            userID: user.id,
+            userID: user.uuid,
             userName: user.username,
             userDisplayName: user.displayName || user.username,
             // Prompt users for additional information about the authenticator.
@@ -154,17 +179,23 @@ app.put('/register', json(), async (req, res) => {
         const base64CredentialID = isoBase64URL.fromBuffer(credentialID);
 
         const user = req.session.user;
+        try{
+            const data = [base64CredentialID, base64PublicKey, credential.response.transports || [], user.id];
+            await pool.query('INSERT INTO user_credentials (id, public_key, transports, user_id) VALUES ($1, $2, $3, $4) RETURNING *', data);
+        } catch (e) {
+            return res.sendStatus(500);
+        }
 
         // Store the registration result.
-        credentials.push({
-            id: base64CredentialID,
-            publicKey: base64PublicKey,
-            // name: req.useragent.platform,
-            transports: credential.response.transports || [],
-            registered: (new Date()).getTime(),
-            last_used: null,
-            user_id: user.id,
-        });
+        // credentials.push({
+        //     id: base64CredentialID,
+        //     public_key: base64PublicKey,
+        //     // name: req.useragent.platform,
+        //     transports: credential.response.transports || [],
+        //     // registered: (new Date()).getTime(),
+        //     // last_used: null,
+        //     user_id: user.id,
+        // });
 
         // Delete the challenge from the session.
         delete req.session.challenge;
@@ -191,22 +222,25 @@ app.put('/signin', json(), async (req, res) => {
     // const expectedRPID = process.env.HOSTNAME;
 
     try {
-
+        const credResult = await pool.query('SELECT * FROM user_credentials WHERE id = $1', [credential.id]);
+        const cred = credResult.rows[0];
         // Find the matching credential from the credential ID
-        const cred = credentials.find(cred => cred.id === credential.id);
+        // const cred = credentials.find(cred => cred.id === credential.id);
         if (!cred) {
             throw new Error('Matching credential not found on the server. Try signing in with a password.');
         }
 
         // Find the matching user from the user ID contained in the credential.
-        const user = users.find(user => user.id === cred.user_id);
+        const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [cred.user_id]);
+        const user = userResult.rows[0];
+        // const user = users.find(user => user.id === cred.user_id);
         if (!user) {
             throw new Error('User not found.');
         }
 
         // Decode ArrayBuffers and construct an authenticator object.
         const authenticator = {
-            credentialPublicKey: isoBase64URL.toBuffer(cred.publicKey),
+            credentialPublicKey: isoBase64URL.toBuffer(cred.public_key),
             credentialID: isoBase64URL.toBuffer(cred.id),
             transports: cred.transports,
         };
