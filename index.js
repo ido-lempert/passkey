@@ -229,6 +229,7 @@ app.put('/signin', json(), async (req, res) => {
     // const expectedOrigin = getOrigin(req.get('User-Agent'));
     // const expectedRPID = process.env.HOSTNAME;
 
+    console.log('/signin *credential*', credential);
     try {
         const credResult = await pool.query('SELECT * FROM user_credentials WHERE id = $1', [credential.id]);
         const cred = credResult.rows[0];
