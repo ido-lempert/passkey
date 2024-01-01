@@ -232,6 +232,8 @@ app.put('/signin', json(), async (req, res) => {
     try {
         const credResult = await pool.query('SELECT * FROM user_credentials WHERE id = $1', [credential.id]);
         const cred = credResult.rows[0];
+
+        console.log('/signin *user_credentials*', cred);
         // Find the matching credential from the credential ID
         // const cred = credentials.find(cred => cred.id === credential.id);
         if (!cred) {
@@ -241,6 +243,7 @@ app.put('/signin', json(), async (req, res) => {
         // Find the matching user from the user ID contained in the credential.
         const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [cred.user_id]);
         const user = userResult.rows[0];
+        console.log('/signin *user*', user);
         // const user = users.find(user => user.id === cred.user_id);
         if (!user) {
             throw new Error('User not found.');
@@ -265,6 +268,7 @@ app.put('/signin', json(), async (req, res) => {
 
         const { verified, authenticationInfo } = verification;
 
+        console.log('/signin *verified*', verified);
         // If the authentication failed, throw.
         if (!verified) {
             throw new Error('User verification failed.');
